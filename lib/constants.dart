@@ -1,5 +1,3 @@
-library constants;
-
 const int signedByteMin = -128;
 const int signedByteMax = 127;
 
@@ -22,4 +20,6 @@ const int signedLongMin = -9223372036854775808;
 const int signedLongMax = 9223372036854775807;
 
 const int unsignedLongMin = 0;
-const int unsignedLongMax = 18446744073709551615;
+// unsignedLongMax (2^64 - 1) exceeds Dart's 64-bit signed int range.
+// Use clamp with signedLongMax as practical upper bound for Dart.
+const int unsignedLongMax = 9223372036854775807;
