@@ -1,227 +1,191 @@
-library struct;
-
 import 'dart:typed_data';
 
 import './constants.dart';
 
-// @	native	native	native
-// =	native	standard	none
-// <	little-endian	standard	none
-// >	big-endian	standard	none
-// !	network (= big-endian)	standard	none
+/// Format characters (similar to Python struct module):
+///   @  native endian, native size
+///   =  native endian, standard size
+///   <  little-endian
+///   >  big-endian
+///   !  network (= big-endian)
+///   x  pad byte
+///   b  signed char (1 byte)
+///   B  unsigned char (1 byte)
+///   ?  boolean (1 byte)
+///   h  signed short (2 bytes)
+///   H  unsigned short (2 bytes)
+///   i  signed int (4 bytes)
+///   I  unsigned int (4 bytes)
+///   l  signed long (8 bytes)
+///   L  unsigned long (8 bytes)
+///   f  float (4 bytes)
+///   d  double (8 bytes)
 
-List unpack(String format, ByteBuffer buffer) {
-  if (format == null || format == '') {
-    throw new ArgumentError('Format string must have a value');
+List<Object> unpack(String format, ByteBuffer buffer) {
+  if (format.isEmpty) {
+    throw ArgumentError('Format string must have a value');
   }
 
-  var length = calculateSize(format);
+  final length = calculateSize(format);
 
   if (length != buffer.lengthInBytes) {
-    throw new FormatException(
-        'Format string length does not match buffer length');
+    throw FormatException(
+      'Format string length does not match buffer length',
+    );
   }
 
-  List output = [];
-  ByteData bytes = new ByteData.view(buffer);
+  final output = <Object>[];
+  final bytes = ByteData.view(buffer);
 
-  Endianness endian;
+  Endian endian = Endian.host;
+  int i = 0;
+
+  final firstChar = format[0];
+  if (firstChar == '@' || firstChar == '=') {
+    endian = Endian.host;
+    i = 1;
+  } else if (firstChar == '<') {
+    endian = Endian.little;
+    i = 1;
+  } else if (firstChar == '>' || firstChar == '!') {
+    endian = Endian.big;
+    i = 1;
+  }
 
   int index = 0;
 
-  int i = 0;
-
-  var firstChar = format[index];
-  if (firstChar == '@' || firstChar == '=') {
-    endian = Endianness.HOST_ENDIAN;
-    i = 1;
-  } else if (firstChar == '<') {
-    endian = Endianness.LITTLE_ENDIAN;
-    i = 1;
-  } else if (firstChar == '>' || firstChar == '!') {
-    endian = Endianness.BIG_ENDIAN;
-    i = 1;
-  }
-
   for (; i < format.length; i++) {
-    var ch = format[i];
+    final ch = format[i];
 
     switch (ch) {
       case 'x':
         index += 1;
-        break;
       case 'b':
-        var byte = bytes.getInt8(index);
-        output.add(byte);
+        output.add(bytes.getInt8(index));
         index += 1;
-        break;
       case 'B':
-        var byte = bytes.getUint8(index);
-        output.add(byte);
+        output.add(bytes.getUint8(index));
         index += 1;
-        break;
       case '?':
-        var boolByte = bytes.getUint8(index);
-        if (boolByte == 0) {
-          output.add(false);
-        } else {
-          output.add(true);
-        }
+        output.add(bytes.getUint8(index) != 0);
         index += 1;
-        break;
       case 'h':
-        var short = bytes.getInt16(index, endian);
-        output.add(short);
+        output.add(bytes.getInt16(index, endian));
         index += 2;
-        break;
       case 'H':
-        var short = bytes.getUint16(index, endian);
-        output.add(short);
+        output.add(bytes.getUint16(index, endian));
         index += 2;
-        break;
       case 'i':
-        var integer = bytes.getInt32(index, endian);
-        output.add(integer);
+        output.add(bytes.getInt32(index, endian));
         index += 4;
-        break;
       case 'I':
-        var integer = bytes.getUint32(index, endian);
-        ;
-        output.add(integer);
+        output.add(bytes.getUint32(index, endian));
         index += 4;
-        break;
       case 'l':
-        var long = bytes.getInt64(index, endian);
-        output.add(long);
+        output.add(bytes.getInt64(index, endian));
         index += 8;
-        break;
       case 'L':
-        var long = bytes.getUint64(index, endian);
-        ;
-        output.add(long);
+        output.add(bytes.getUint64(index, endian));
         index += 8;
-        break;
       case 'f':
-        var float = bytes.getFloat32(index, endian);
-        output.add(float);
+        output.add(bytes.getFloat32(index, endian));
         index += 4;
-        break;
       case 'd':
-        var daable = bytes.getFloat64(index, endian);
-        output.add(daable);
+        output.add(bytes.getFloat64(index, endian));
         index += 8;
-        break;
       default:
-        throw new FormatException('Format string cannot contain \'$ch\'');
-        break;
+        throw FormatException("Format string cannot contain '$ch'");
     }
   }
 
   return output;
 }
 
-ByteBuffer pack(String format, List data) {
-  if (format == null || format == '') {
-    throw new ArgumentError('Format string must have a value');
+ByteBuffer pack(String format, List<Object> data) {
+  if (format.isEmpty) {
+    throw ArgumentError('Format string must have a value');
   }
 
-  var length = calculateSize(format);
+  final length = calculateSize(format);
 
   int dataIndex = 0;
-  ByteData bytes = new ByteData(length);
-  int index = 0;
+  final bytes = ByteData(length);
 
-  Endianness endian;
-
+  Endian endian = Endian.host;
   int i = 0;
-  var firstChar = format[i];
+  final firstChar = format[0];
   if (firstChar == '@' || firstChar == '=') {
-    endian = Endianness.HOST_ENDIAN;
+    endian = Endian.host;
     i = 1;
   } else if (firstChar == '<') {
-    endian = Endianness.LITTLE_ENDIAN;
+    endian = Endian.little;
     i = 1;
   } else if (firstChar == '>' || firstChar == '!') {
-    endian = Endianness.BIG_ENDIAN;
+    endian = Endian.big;
     i = 1;
   }
 
+  int index = 0;
+
   for (; i < format.length; i++) {
-    var ch = format[i];
+    final ch = format[i];
     switch (ch) {
       case 'x':
         index += 1;
-        break;
       case 'b':
-        int byte = data[dataIndex++];
+        int byte = data[dataIndex++] as int;
         byte = byte.clamp(signedByteMin, signedByteMax);
-        bytes.setUint8(index, byte);
+        bytes.setInt8(index, byte);
         index += 1;
-        break;
       case 'B':
-        int byte = data[dataIndex++];
+        int byte = data[dataIndex++] as int;
         byte = byte.clamp(unsignedByteMin, unsignedByteMax);
         bytes.setUint8(index, byte);
         index += 1;
-        break;
       case '?':
-        bool boolVal = data[dataIndex++];
-        if (boolVal) {
-          bytes.setUint8(index, 1);
-        } else {
-          bytes.setUint8(index, 0);
-        }
+        final boolVal = data[dataIndex++] as bool;
+        bytes.setUint8(index, boolVal ? 1 : 0);
         index += 1;
-        break;
       case 'h':
-        int short = data[dataIndex++];
-        short = short.clamp(unsignedShortMin, unsignedShortMax);
-        bytes.setUint16(index, short, endian);
-        index += 2;
-        break;
-      case 'H':
-        int short = data[dataIndex++];
+        int short = data[dataIndex++] as int;
         short = short.clamp(signedShortMin, signedShortMax);
         bytes.setInt16(index, short, endian);
         index += 2;
-        break;
+      case 'H':
+        int short = data[dataIndex++] as int;
+        short = short.clamp(unsignedShortMin, unsignedShortMax);
+        bytes.setUint16(index, short, endian);
+        index += 2;
       case 'i':
-        int integer = data[dataIndex++];
-        integer = integer.clamp(unsignedIntMin, unsignedIntMax);
+        int integer = data[dataIndex++] as int;
+        integer = integer.clamp(signedIntMin, signedIntMax);
         bytes.setInt32(index, integer, endian);
         index += 4;
-        break;
       case 'I':
-        int integer = data[dataIndex++];
-        integer = integer.clamp(signedIntMin, signedIntMax);
+        int integer = data[dataIndex++] as int;
+        integer = integer.clamp(unsignedIntMin, unsignedIntMax);
         bytes.setUint32(index, integer, endian);
         index += 4;
-        break;
       case 'l':
-        int long = data[dataIndex++];
+        int long = data[dataIndex++] as int;
+        long = long.clamp(signedLongMin, signedLongMax);
+        bytes.setInt64(index, long, endian);
+        index += 8;
+      case 'L':
+        int long = data[dataIndex++] as int;
         long = long.clamp(unsignedLongMin, unsignedLongMax);
         bytes.setUint64(index, long, endian);
         index += 8;
-        break;
-      case 'L':
-        int long = data[dataIndex++];
-        long = long.clamp(signedLongMin, signedLongMax);
-        bytes.setUint64(index, long, endian);
-        index += 8;
-        break;
       case 'f':
-        double float = data[dataIndex++];
+        final float = data[dataIndex++] as double;
         bytes.setFloat32(index, float, endian);
         index += 4;
-        break;
       case 'd':
-        double float = data[dataIndex++];
-        bytes.setFloat64(index, float, endian);
+        final doubleVal = data[dataIndex++] as double;
+        bytes.setFloat64(index, doubleVal, endian);
         index += 8;
-        break;
       default:
-        throw new FormatException('Format string cannot contain \'$ch\'');
-        break;
+        throw FormatException("Format string cannot contain '$ch'");
     }
   }
 
@@ -229,13 +193,13 @@ ByteBuffer pack(String format, List data) {
 }
 
 int calculateSize(String format) {
-  if (format == null || format == '') {
-    throw new ArgumentError('Format string must have a value');
+  if (format.isEmpty) {
+    throw ArgumentError('Format string must have a value');
   }
 
   int calculatedSize = 0;
   for (int i = 0; i < format.length; i++) {
-    var ch = format[i];
+    final ch = format[i];
     switch (ch) {
       case '@':
       case '=':
@@ -244,44 +208,23 @@ int calculateSize(String format) {
       case '>':
         break;
       case 'x':
-        calculatedSize += 1;
-        break;
       case 'b':
-        calculatedSize += 1;
-        break;
       case 'B':
-        calculatedSize += 1;
-        break;
       case '?':
         calculatedSize += 1;
-        break;
       case 'h':
-        calculatedSize += 2;
-        break;
       case 'H':
         calculatedSize += 2;
-        break;
       case 'i':
-        calculatedSize += 4;
-        break;
       case 'I':
-        calculatedSize += 4;
-        break;
-      case 'l':
-        calculatedSize += 8;
-        break;
-      case 'L':
-        calculatedSize += 8;
-        break;
       case 'f':
         calculatedSize += 4;
-        break;
+      case 'l':
+      case 'L':
       case 'd':
         calculatedSize += 8;
-        break;
       default:
-        throw new FormatException('Format string cannot contain \'$ch\'');
-        break;
+        throw FormatException("Format string cannot contain '$ch'");
     }
   }
 
